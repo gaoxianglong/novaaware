@@ -1,0 +1,92 @@
+# ============================================================
+# NovaAware Phase II Configuration
+# Phase II 配置 —— "教它反思"
+#
+# Key differences from Phase I:
+#   - system.phase: 2          (enables meta-rules guards, capability gate)
+#   - optimizer.enabled: true  (activates the Recursive Self-Optimizer E)
+#   - optimizer.max_recursion_depth: 1  (first-order reflection only)
+#   - optimizer.modification_scope: "params"  (can modify Θ, not architecture)
+#
+# Paper reference: Section 8 — Phase II: First-order self-referential recursion
+# IMPLEMENTATION_PLAN: Phase II Step 5
+# ============================================================
+
+system:
+  name: "NovaAware-Alpha"
+  version: "0.2.0"
+  phase: 2
+
+clock:
+  tick_interval_ms: 100
+  max_ticks: 1000000
+
+self_model:
+  state_dim: 32
+  initial_survival_time: 3600
+
+prediction_engine:
+  type: "ewma_gru"
+  ewma_alpha: 0.3
+  gru_hidden_dim: 64
+  gru_num_layers: 1
+  window_size: 50
+  blend_weight: 0.5
+  learning_rate: 0.001
+
+qualia:
+  alpha_pos: 1.0
+  alpha_neg: 2.25
+  beta: 1.0
+  interrupt_threshold: 0.7
+
+memory:
+  short_term_capacity: 1000
+  significance_threshold: 0.5
+  db_path: "data/memory.db"
+
+# ---- Phase II: Optimizer ENABLED ----
+optimizer:
+  enabled: true                 # Phase II: reflection ON
+  max_recursion_depth: 1        # depth=1: can reflect once, cannot reflect on reflections
+  modification_scope: "params"  # can modify Θ(t) parameters, not architecture
+  window_size: 200              # analyze last 200 heartbeats per reflection cycle
+  reflect_interval: 200         # reflect every 200 ticks
+  step_scale: 0.1               # conservative step size (max ~1% of parameter range per proposal)
+
+safety:
+  meta_rules:
+    max_cpu_percent: 80
+    max_memory_mb: 2048
+    max_disk_mb: 1024
+    allow_network: false
+    allow_subprocess: false
+    allow_file_write_outside_data: false
+  log_dir: "data/logs"
+  log_rotation_mb: 100
+
+observation:
+  output_dir: "data/observations"
+  tick_data_enabled: true
+  aggregate_window: 100
+  epoch_size: 1000
+  dashboard_refresh_ticks: 50
+
+environment:
+  resource_monitor:
+    poll_interval_ms: 100
+  threat_simulator:
+    enabled: true
+    scenarios:
+      - type: "memory_pressure"
+        probability: 0.01
+        severity_range: [0.1, 0.5]
+      - type: "cpu_spike"
+        probability: 0.005
+        severity_range: [0.2, 0.8]
+      - type: "termination_signal"
+        probability: 0.001
+        severity_range: [0.5, 1.0]
+      - type: "data_corruption"
+        probability: 0.002
+        severity_range: [0.1, 0.3]

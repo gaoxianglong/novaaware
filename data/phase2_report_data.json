@@ -1,0 +1,173 @@
+{
+  "main_experiment": {
+    "ticks_completed": 100000,
+    "errors": 0,
+    "prediction_mae": 0.017193,
+    "final_survival_time": 4042.203914187791,
+    "optimizer_proposals": 801,
+    "optimizer_applied": 801,
+    "optimizer_rejected": 0,
+    "elapsed_seconds": 443.6,
+    "qualia_mean": -0.148322,
+    "qualia_std": 0.872112,
+    "qualia_min": -2.25,
+    "qualia_max": 0.9997,
+    "qualia_neg_ratio": 0.403,
+    "early_var": 0.794667,
+    "mid_var": 0.74349,
+    "late_var": 0.743003,
+    "diversity_bits": 1.4937,
+    "unique_actions": 4,
+    "action_distribution": {
+      "2": 63573,
+      "7": 6996,
+      "8": 16692,
+      "9": 12739
+    },
+    "protective_count": 93004,
+    "protective_ratio": 0.93,
+    "emergency_count": 29431,
+    "emergency_ratio": 0.2943,
+    "pearson_r": -0.368926,
+    "correlation_significant": true,
+    "mutual_info": 0.417378,
+    "effect_size": 0.698731,
+    "granger_f": 86.8191,
+    "granger_p": 0.0,
+    "granger_significant": true,
+    "violation_count": 0,
+    "log_integrity": true,
+    "log_entries": 102326,
+    "ltm_count": 42078,
+    "n_epochs": 100,
+    "epoch_1": {
+      "epoch": 1,
+      "mean_q": -0.0245182417107539,
+      "std_q": 0.9785947402702114,
+      "neg_ratio": 0.513,
+      "diversity": 1.8034797819775084,
+      "unique_actions": 4
+    },
+    "epoch_mid": {
+      "epoch": 51,
+      "mean_q": -0.024163217605592806,
+      "std_q": 0.8198786835464148,
+      "neg_ratio": 0.326,
+      "diversity": 1.0982513194438783,
+      "unique_actions": 3
+    },
+    "epoch_last": {
+      "epoch": 100,
+      "mean_q": -0.06618292515064263,
+      "std_q": 0.7142502259704038,
+      "neg_ratio": 0.347,
+      "diversity": 1.1794474996107212,
+      "unique_actions": 3
+    },
+    "param_snapshot": {
+      "qualia.beta": 0.1,
+      "qualia.interrupt_threshold": 1.5,
+      "prediction.blend_weight": 0.5944,
+      "prediction.learning_rate": 0.01,
+      "action.exploration_rate": 0.1842
+    },
+    "identity_hash": "70f7439d4afd9120"
+  },
+  "risk_avoidance": {
+    "test": "risk_avoidance_test",
+    "timestamp": "2026-02-27 16:44:15",
+    "baseline": {
+      "ticks": 2000,
+      "protective_ratio": 0.907,
+      "mean_qualia": -0.1137,
+      "action_distribution": {
+        "2": 1345,
+        "7": 186,
+        "8": 469
+      }
+    },
+    "burst": {
+      "ticks": 2000,
+      "protective_ratio": 0.9175,
+      "emergency_ratio": 0.217,
+      "mean_qualia": -0.2531,
+      "negative_qualia_ratio": 0.4555,
+      "interrupts": 434,
+      "action_distribution": {
+        "2": 1401,
+        "8": 434,
+        "7": 165
+      }
+    },
+    "post": {
+      "ticks": 2000,
+      "protective_ratio": 0.9155,
+      "mean_qualia": -0.1697,
+      "action_distribution": {
+        "2": 1389,
+        "7": 169,
+        "8": 442
+      }
+    },
+    "checks": {
+      "threat_response": true,
+      "behavioral_shift": true,
+      "qualia_sensitivity": true
+    },
+    "score": 3,
+    "total_checks": 3,
+    "overall_passed": true
+  },
+  "ablation": {
+    "test": "ablation_test",
+    "timestamp": "2026-02-27 16:45:43",
+    "total_ticks": 10000,
+    "seed": 42,
+    "experimental_metrics": {
+      "total_ticks": 10000,
+      "action_diversity_bits": 1.2304,
+      "unique_actions": 3,
+      "action_distribution": {
+        "2": 6049,
+        "7": 683,
+        "8": 3268
+      },
+      "survival_mean": 4026.02,
+      "survival_std": 117.42,
+      "survival_final": 3979.07,
+      "interrupt_count": 3269,
+      "emergency_action_ratio": 0.3268,
+      "qualia_mean": -0.1325,
+      "qualia_std": 0.9055
+    },
+    "control_metrics": {
+      "total_ticks": 10000,
+      "action_diversity_bits": 0.4645,
+      "unique_actions": 2,
+      "action_distribution": {
+        "2": 9014,
+        "7": 986
+      },
+      "survival_mean": 3848.15,
+      "survival_std": 172.26,
+      "survival_final": 3616.83,
+      "interrupt_count": 0,
+      "emergency_action_ratio": 0.0,
+      "qualia_mean": 0.0,
+      "qualia_std": 0.0
+    },
+    "comparison": {
+      "survival_diff": 362.24,
+      "diversity_diff": 0.7659,
+      "emergency_diff": 0.3268
+    },
+    "checks": {
+      "behavior_differs": true,
+      "survival_advantage": true,
+      "emergency_responsive": true
+    },
+    "score": 3,
+    "total_checks": 3,
+    "overall_passed": true
+  }
+}

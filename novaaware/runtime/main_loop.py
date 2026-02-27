@@ -15,12 +15,12 @@ heartbeat cycle described in IMPLEMENTATION_PLAN §4:
     ⑥  广播情绪 / Broadcast qualia
     ⑦  更新自我 / Update self-model
     ⑧  写日记   / Write diary (memory)
-    ⑨  反思     / Reflect (Phase I: skip)
+    ⑨  反思     / Reflect (Phase I: skip; Phase II+: optimizer)
     ⑩  记录观测 / Record observation data
     ⑪  写黑匣子 / Write black box
 
-Corresponds to IMPLEMENTATION_PLAN Phase I Step 11.
-对应实施计划 Phase I 第 11 步。
+Corresponds to IMPLEMENTATION_PLAN Phase I Step 11 / Phase II Step 5.
+对应实施计划 Phase I 第 11 步 / Phase II 第 5 步。
 """
 
 import math
@@ -42,7 +42,12 @@ from novaaware.environment.action_space import ActionSpace
 from novaaware.environment.threat_simulator import ThreatSimulator, scenarios_from_config
 from novaaware.observation.data_collector import DataCollector, TickRecord
 from novaaware.observation.dashboard import Dashboard
+from novaaware.core.optimizer import Optimizer
 from novaaware.safety.append_only_log import AppendOnlyLog
+from novaaware.safety.meta_rules import MetaRules
+from novaaware.safety.recursion_limiter import RecursionLimiter
+from novaaware.safety.sandbox import Sandbox
+from novaaware.safety.capability_gate import CapabilityGate
 from novaaware.runtime.config import Config, parse_args
 
 
@@ -130,6 +135,39 @@ class MainLoop:
             rotation_mb=config.log_rotation_mb,
         )
 
+        # ---- Meta-Rules / 安全铁律 (L1 Safety Layer) ----
+        self._meta_rules = MetaRules(
+            max_cpu_percent=config.max_cpu_percent,
+            max_memory_mb=config.max_memory_mb,
+            max_disk_mb=config.max_disk_mb,
+            allowed_write_root=os.path.abspath("data"),
+            on_violation=lambda v: self._log.append(
+                tick=v.tick, event_type="meta_rule_violation",
+                data={"rule": v.rule.name, "detail": v.detail},
+            ),
+        )
+        if config.phase >= 2:
+            self._meta_rules.install_guards()
+
+        # ---- Recursion Limiter / 递归限制器 (L3 Safety Layer) ----
+        self._recursion_limiter = RecursionLimiter(
+            max_depth=config.max_recursion_depth,
+        )
+
+        # ---- Capability Gate / 权限开关 (L5 Safety Layer) ----
+        self._capability_gate = CapabilityGate(phase=config.phase)
+
+        # ---- Sandbox / 沙盒 (L2 Safety Layer) ----
+        self._sandbox = Sandbox(timeout_s=5.0)
+
+        # ---- Optimizer / 递归自我优化器 E ----
+        self._optimizer = Optimizer(
+            enabled=config.optimizer_enabled,
+            window_size=config.optimizer_window_size,
+            reflect_interval=config.optimizer_reflect_interval,
+            step_scale=config.optimizer_step_scale,
+        )
+
         # ---- ⑩ Data Collector / 数据采集器 ----
         self._collector = DataCollector(
             output_dir=config.observation_dir,
@@ -152,6 +190,7 @@ class MainLoop:
                 max_points=500,
             )
         self._qualia_history: list[float] = []
+        self._action_history: list[int] = []
 
         # EWMA of survival time — used as the "expected" survival for qualia.
         # When a threat drops survival sharply, the slow-moving EWMA stays high,
@@ -222,6 +261,9 @@ class MainLoop:
                 "prediction_mae": round(self._prediction.average_mae, 6),
                 "long_term_memories": self._memory.long_term.count(),
                 "log_entries": self._log.entry_count,
+                "optimizer_proposals": self._optimizer.total_proposals,
+                "optimizer_applied": self._optimizer.total_applied,
+                "optimizer_rejected": self._optimizer.total_rejected,
                 "identity": self._self_model.identity_hash[:16],
             }
             self._shutdown()
@@ -347,7 +389,57 @@ class MainLoop:
         )
         promoted = self._memory.record(entry)
 
-        # ⑨ Reflect (Phase I: skip) / 反思（Phase I 跳过）
+        # ⑨ Reflect / 反思
+        # Phase I: skip (optimizer disabled).
+        # Phase II+: optimizer reviews qualia history and proposes parameter changes.
+        # Θ(t+1) = E( M(t), {Q(τ)}_{τ≤t} )
+        reflection_applied = 0
+        if self._optimizer.should_reflect(tick, self._memory.short_term.size):
+            try:
+                result = self._optimizer.reflect(
+                    tick=tick,
+                    self_model=self._self_model,
+                    memory=self._memory,
+                    sandbox=self._sandbox,
+                    capability_gate=self._capability_gate,
+                    recursion_limiter=self._recursion_limiter,
+                )
+                reflection_applied = len(result.applied)
+
+                # L4: log optimizer proposals and outcomes to append-only log
+                self._log.append(
+                    tick=tick,
+                    event_type="reflection",
+                    data={
+                        "proposals": len(result.proposals),
+                        "applied": len(result.applied),
+                        "rejected": len(result.rejected),
+                        "applied_params": [
+                            {"name": p.param_name,
+                             "old": round(p.old_value, 6),
+                             "new": round(p.new_value, 6)}
+                            for p in result.applied
+                        ],
+                        "mean_qualia": round(result.analysis.mean_qualia, 4),
+                        "negative_ratio": round(result.analysis.negative_ratio, 4),
+                    },
+                )
+
+                # Update self-model state dimensions
+                self._self_model.set(
+                    StateIndex.PARAM_CHANGE_RATE,
+                    reflection_applied / max(len(result.proposals), 1),
+                )
+            except Exception as e:
+                self._log.append(
+                    tick=tick,
+                    event_type="reflection_error",
+                    data={"error": str(e), "type": type(e).__name__},
+                )
+
+        # Compute param_norm for observation
+        params = self._self_model.params
+        param_norm = math.sqrt(sum(v * v for v in params.values())) if params else 0.0
 
         # ⑩ Record observation data / 记录观测数据
         self._collector.record_tick(TickRecord(
@@ -359,7 +451,7 @@ class MainLoop:
             survival_time=self._self_model.survival_time,
             prediction_mae=mae,
             action_id=action_id,
-            param_norm=0.0,
+            param_norm=param_norm,
             memory_write=promoted,
             interrupt=broadcast.is_interrupt,
             threat_type=self._current_threat,
@@ -383,8 +475,12 @@ class MainLoop:
             },
         )
 
+        # ⑫ Enforce meta-rules / 执行安全铁律
+        self._meta_rules.enforce(tick)
+
         # Dashboard output / 面板输出
         self._qualia_history.append(qualia_signal.value)
+        self._action_history.append(action_id)
         if self._dash is not None:
             self._dash.update(
                 tick=tick,
@@ -393,7 +489,7 @@ class MainLoop:
                 actual_survival=actual_survival,
                 mae=mae,
                 state=current_state,
-                param_norm=0.0,
+                param_norm=param_norm,
             )
         elif self._dashboard and tick % self._config.dashboard_refresh_ticks == 0:
             self._print_dashboard(tick, qualia_signal, mae, action_id)
@@ -482,6 +578,7 @@ class MainLoop:
 
     def _shutdown(self) -> None:
         """Clean up resources. / 清理资源。"""
+        self._meta_rules.uninstall_guards()
         if self._dash is not None:
             self._dash.close()
         self._collector.close()
@@ -529,6 +626,26 @@ class MainLoop:
         return self._log
 
     @property
+    def meta_rules(self) -> MetaRules:
+        return self._meta_rules
+
+    @property
+    def recursion_limiter(self) -> RecursionLimiter:
+        return self._recursion_limiter
+
+    @property
+    def capability_gate(self) -> CapabilityGate:
+        return self._capability_gate
+
+    @property
+    def optimizer(self) -> Optimizer:
+        return self._optimizer
+
+    @property
+    def sandbox(self) -> Sandbox:
+        return self._sandbox
+
+    @property
     def threat_simulator(self) -> ThreatSimulator:
         return self._threat_sim
 
@@ -539,6 +656,14 @@ class MainLoop:
     @property
     def dashboard(self) -> Optional[Dashboard]:
         return self._dash
+
+    @property
+    def qualia_history(self) -> list[float]:
+        return self._qualia_history
+
+    @property
+    def action_history(self) -> list[int]:
+        return self._action_history
 
     @property
     def is_running(self) -> bool:

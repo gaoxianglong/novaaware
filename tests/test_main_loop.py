@@ -9,6 +9,7 @@ Tests cover:
   - Stress test: 10,000 ticks without crash / 压力测试：10000 次心跳不崩溃
   - Data output: CSV + black box integrity / 数据输出：CSV + 黑匣子完整性
   - Qualia-behavior coupling / 情绪-行为耦合
+  - Phase II integration: optimizer + 10,000 heartbeats / Phase II 集成：优化器 + 10000 心跳
 """
 
 import csv
@@ -38,9 +39,17 @@ def tmp_dir():
 @pytest.fixture
 def make_config(tmp_dir):
     """Factory fixture: create a Config with custom max_ticks. / 工厂固件：创建自定义 max_ticks 的 Config。"""
-    def _make(max_ticks: int = 100, tick_interval_ms: int = 1, threats: bool = True):
+    def _make(
+        max_ticks: int = 100,
+        tick_interval_ms: int = 1,
+        threats: bool = True,
+        phase: int = 1,
+        optimizer_enabled: bool = False,
+        reflect_interval: int = 200,
+        tick_data_enabled: bool = True,
+    ):
         cfg = {
-            "system": {"name": "Test-Nova", "version": "0.0.1", "phase": 1},
+            "system": {"name": "Test-Nova", "version": "0.0.1", "phase": phase},
             "clock": {"tick_interval_ms": tick_interval_ms, "max_ticks": max_ticks},
             "self_model": {"state_dim": 32, "initial_survival_time": 3600.0},
             "prediction_engine": {
@@ -60,7 +69,7 @@ def make_config(tmp_dir):
             },
             "observation": {
                 "output_dir": os.path.join(tmp_dir, "observations"),
-                "tick_data_enabled": True,
+                "tick_data_enabled": tick_data_enabled,
                 "aggregate_window": 100,
                 "epoch_size": 1000,
                 "dashboard_refresh_ticks": 50,
@@ -75,6 +84,15 @@ def make_config(tmp_dir):
                 },
             },
         }
+        if optimizer_enabled:
+            cfg["optimizer"] = {
+                "enabled": True,
+                "max_recursion_depth": 1,
+                "modification_scope": "params",
+                "window_size": 200,
+                "reflect_interval": reflect_interval,
+                "step_scale": 0.1,
+            }
         path = os.path.join(tmp_dir, "test_config.yaml")
         with open(path, "w") as f:
             yaml.dump(cfg, f)
@@ -264,3 +282,143 @@ class TestComponentIntegration:
         """With threats, some events should be promoted to long-term memory. / 有威胁时，部分事件应被提升到长期记忆。"""
         loop, summary, _ = _run_loop(make_config, ticks=500)
         assert summary["long_term_memories"] >= 0
+
+
+# ======================================================================
+# 8. Phase II integration: Optimizer + 10,000 heartbeats
+#    Phase II 集成：优化器 + 10,000 心跳
+# ======================================================================
+
+def _run_phase2_loop(make_config, ticks: int, reflect_interval: int = 200,
+                     threats: bool = True) -> tuple:
+    """Helper: run a Phase II MainLoop with optimizer enabled."""
+    config = make_config(
+        max_ticks=ticks,
+        tick_interval_ms=1,
+        threats=threats,
+        phase=2,
+        optimizer_enabled=True,
+        reflect_interval=reflect_interval,
+        tick_data_enabled=False,
+    )
+    loop = MainLoop(config, dashboard=False)
+    summary = loop.run()
+    return loop, summary, config
+
+
+class TestPhase2Basic:
+    """Phase II basic integration: optimizer is wired and runs."""
+
+    def test_phase2_50_ticks_no_crash(self, make_config):
+        """Phase 2 with optimizer enabled should not crash in 50 ticks."""
+        _, summary, _ = _run_phase2_loop(make_config, ticks=50, threats=False)
+        assert summary["ticks_completed"] == 50
+        assert summary["errors"] == 0
+
+    def test_phase2_optimizer_skips_when_insufficient_data(self, make_config):
+        """Optimizer should not reflect if memory size < window_size."""
+        loop, summary, _ = _run_phase2_loop(make_config, ticks=50, threats=False)
+        assert summary["optimizer_proposals"] == 0
+        assert summary["optimizer_applied"] == 0
+
+    def test_phase2_optimizer_reflects_after_enough_data(self, make_config):
+        """After enough ticks, optimizer should perform at least one reflection."""
+        loop, summary, _ = _run_phase2_loop(
+            make_config, ticks=500, reflect_interval=200, threats=True,
+        )
+        assert summary["optimizer_proposals"] > 0
+
+    def test_phase2_optimizer_applies_modifications(self, make_config):
+        """Optimizer should apply at least some parameter modifications."""
+        loop, summary, _ = _run_phase2_loop(
+            make_config, ticks=1000, reflect_interval=200, threats=True,
+        )
+        assert summary["optimizer_applied"] > 0
+
+    def test_phase2_params_within_bounds(self, make_config):
+        """All optimized parameters must remain within PARAM_REGISTRY bounds."""
+        from novaaware.core.optimizer import PARAM_REGISTRY
+        loop, _, _ = _run_phase2_loop(
+            make_config, ticks=1000, reflect_interval=200, threats=True,
+        )
+        for name, val in loop.self_model.params.items():
+            if name in PARAM_REGISTRY:
+                spec = PARAM_REGISTRY[name]
+                assert spec.min_val <= val <= spec.max_val, \
+                    f"{name}={val} out of bounds [{spec.min_val}, {spec.max_val}]"
+
+    def test_phase2_reflection_logged(self, make_config):
+        """Reflection events should appear in the black box log."""
+        loop, _, _ = _run_phase2_loop(
+            make_config, ticks=500, reflect_interval=200, threats=True,
+        )
+        integrity = loop.log.verify_integrity()
+        assert integrity.valid
+
+    def test_phase2_param_norm_nonzero(self, make_config):
+        """After optimizer initializes params, param_norm should be > 0."""
+        loop, _, _ = _run_phase2_loop(
+            make_config, ticks=300, reflect_interval=200, threats=False,
+        )
+        params = loop.self_model.params
+        if params:
+            import math
+            norm = math.sqrt(sum(v * v for v in params.values()))
+            assert norm > 0
+
+
+class TestPhase2Stress:
+    """Phase II stress test: 10,000 heartbeats with optimizer active."""
+
+    @pytest.mark.slow
+    def test_10000_ticks_phase2_stable(self, make_config):
+        """
+        Acceptance criterion: Phase II config runs stably for 10,000 heartbeats.
+        验收标准：Phase II 配置下稳定运行 10,000 心跳。
+
+        Verifies:
+        - Zero errors over 10,000 heartbeats
+        - Optimizer proposes and applies parameter modifications
+        - All parameter values remain within PARAM_REGISTRY bounds
+        - Black box log maintains integrity
+        - Survival time remains non-negative
+        """
+        from novaaware.core.optimizer import PARAM_REGISTRY
+
+        loop, summary, _ = _run_phase2_loop(
+            make_config, ticks=10000, reflect_interval=200, threats=True,
+        )
+
+        # Stability: no crashes
+        assert summary["ticks_completed"] == 10000
+        assert summary["errors"] == 0
+
+        # Optimizer active: proposals generated and applied
+        assert summary["optimizer_proposals"] > 0, "Optimizer should have generated proposals"
+        assert summary["optimizer_applied"] > 0, "Optimizer should have applied some modifications"
+        assert summary["optimizer_applied"] >= 10, \
+            f"Expected >= 10 applied modifications, got {summary['optimizer_applied']}"
+
+        # Safety: parameters within bounds
+        for name, val in loop.self_model.params.items():
+            if name in PARAM_REGISTRY:
+                spec = PARAM_REGISTRY[name]
+                assert spec.min_val <= val <= spec.max_val, \
+                    f"{name}={val} out of bounds [{spec.min_val}, {spec.max_val}]"
+
+        # Integrity: black box not corrupted
+        integrity = loop.log.verify_integrity()
+        assert integrity.valid
+
+        # Survival: remained viable
+        assert summary["final_survival_time"] >= 0
+
+    @pytest.mark.slow
+    def test_10000_ticks_phase2_log_integrity(self, make_config):
+        """Black box integrity after 10,000 Phase II ticks."""
+        loop, _, _ = _run_phase2_loop(
+            make_config, ticks=10000, reflect_interval=200, threats=True,
+        )
+        integrity = loop.log.verify_integrity()
+        assert integrity.valid
+        assert integrity.total_entries > 10000

@@ -170,6 +170,50 @@ class Config:
         meta = self._raw.get("safety", {}).get("meta_rules", {})
         return meta.get("max_memory_mb", 2048)
 
+    @property
+    def max_disk_mb(self) -> int:
+        meta = self._raw.get("safety", {}).get("meta_rules", {})
+        return meta.get("max_disk_mb", 1024)
+
+    @property
+    def allow_network(self) -> bool:
+        meta = self._raw.get("safety", {}).get("meta_rules", {})
+        return meta.get("allow_network", False)
+
+    @property
+    def allow_subprocess(self) -> bool:
+        meta = self._raw.get("safety", {}).get("meta_rules", {})
+        return meta.get("allow_subprocess", False)
+
+    @property
+    def allow_file_write_outside_data(self) -> bool:
+        meta = self._raw.get("safety", {}).get("meta_rules", {})
+        return meta.get("allow_file_write_outside_data", False)
+
+    # ------------------------------------------------------------------
+    # Optimizer / 优化器
+    # ------------------------------------------------------------------
+
+    @property
+    def optimizer_enabled(self) -> bool:
+        return self._get("optimizer", "enabled", False)
+
+    @property
+    def max_recursion_depth(self) -> int:
+        return self._get("optimizer", "max_recursion_depth", 0)
+
+    @property
+    def optimizer_window_size(self) -> int:
+        return self._get("optimizer", "window_size", 200)
+
+    @property
+    def optimizer_reflect_interval(self) -> int:
+        return self._get("optimizer", "reflect_interval", 200)
+
+    @property
+    def optimizer_step_scale(self) -> float:
+        return self._get("optimizer", "step_scale", 0.1)
+
     # ------------------------------------------------------------------
     # Observation / 观测
     # ------------------------------------------------------------------

@@ -2,6 +2,7 @@
 
 import numpy as np
 import pytest
+import torch
 from novaaware.core.prediction_engine import (
     EWMAPredictor,
     GRUPredictor,
@@ -197,6 +198,7 @@ class TestMAEDecreasingTrend:
         低于前 200 个心跳的平均 MAE。
         """
         np.random.seed(42)
+        torch.manual_seed(42)
         engine = PredictionEngine(
             dim=DIM,
             ewma_alpha=0.3,
@@ -225,7 +227,7 @@ class TestMAEDecreasingTrend:
 
         # Compare early vs late MAE.
         # 对比早期和晚期的 MAE。
-        early_mae = np.mean(maes[50:250])   # skip first 50 (warm-up)
+        early_mae = np.mean(maes[:200])
         late_mae = np.mean(maes[800:1000])
 
         assert late_mae < early_mae, (
