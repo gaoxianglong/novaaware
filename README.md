@@ -199,6 +199,16 @@ pytest tests/ -v
 | **III: Deep Recursion** | 🔲 Planned | E enabled (structure-level), n ≥ 2 | C1, C2, C3, C4 (deep) |
 | **IV: Open Environment** | 🔲 Planned | External I/O channels enabled | Full + ecological interaction |
 
+## Real-Time Monitoring Dashboard
+
+<!-- 实时监控面板 -->
+
+<p align="center">
+  <img src="https://novaaware.com/monitor.png" width="800" alt="NovaAware Real-Time Monitoring Dashboard / 实时监控面板">
+</p>
+
+<p align="center"><em>Real-Time Monitoring Dashboard — Qualia, Prediction Error, Survival Time & Action Distribution<br>实时监控面板 — 感受质、预测误差、生存时间与行动分布</em></p>
+
 ## Verification Protocol
 
 <!-- 验证协议 -->
