@@ -177,6 +177,13 @@ python -m novaaware.runtime.main_loop --config configs/phase1.yaml
 # 运行第二阶段（一阶递归启用）
 python -m novaaware.runtime.main_loop --config configs/phase2.yaml
 
+# Enable real-time dashboard (matplotlib 4-panel visualization)
+# 启用实时监控面板（matplotlib 四宫格可视化）
+python -m novaaware.runtime.main_loop --config configs/phase1.yaml --dashboard
+
+# Limit ticks for quick experiments / 限制心跳数以快速实验
+python -m novaaware.runtime.main_loop --config configs/phase2.yaml --dashboard --max-ticks 5000
+
 # Run tests / 运行测试
 pytest tests/ -v
 ```
