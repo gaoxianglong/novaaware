@@ -230,11 +230,11 @@ Verification criteria include:
 If you use NovaAware in your research, please cite:
 
 ```bibtex
-@article{novaaware2025,
+@article{novaaware2026,
   title   = {Consciousness as Computation: An Evolvable Digital Life Form
              Based on Self-Referential Recursion and Prediction Error},
   author  = {Gao, Xianglong},
-  year    = {2025},
+  year    = {2026},
   url     = {https://novaaware.com/paper.html}
 }
 ```
