@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Face Expression Demo - GPU Vertex Deformation</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background: #0f0f1a;
+            color: #e0e0e0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            overflow: hidden;
+        }
+
+        /* ===== 加载界面 / Loading overlay ===== */
+        #loading-overlay {
+            position: fixed; inset: 0;
+            background: #0f0f1a;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            z-index: 1000;
+            transition: opacity 0.5s;
+        }
+        #loading-overlay.hidden { opacity: 0; pointer-events: none; }
+        #loading-text { font-size: 18px; margin-bottom: 20px; color: #aaa; }
+        #loading-bar-bg {
+            width: 300px; height: 6px;
+            background: #2a2a3a; border-radius: 3px; overflow: hidden;
+        }
+        #loading-bar {
+            height: 100%; width: 0%;
+            background: linear-gradient(90deg, #6366f1, #8b5cf6);
+            border-radius: 3px;
+            transition: width 0.2s;
+        }
+        #loading-percent { margin-top: 10px; font-size: 14px; color: #888; }
+
+        /* ===== 控制面板 / Control panel ===== */
+        #controls {
+            position: fixed; top: 20px; right: 20px;
+            background: rgba(20, 20, 35, 0.92);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(100, 100, 150, 0.25);
+            border-radius: 16px;
+            padding: 24px;
+            width: 300px;
+            z-index: 100;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+        }
+        #controls h2 {
+            font-size: 16px; font-weight: 600;
+            margin-bottom: 20px; color: #c4b5fd;
+            text-align: center;
+        }
+        .slider-group { margin-bottom: 18px; }
+        .slider-group label {
+            display: flex; justify-content: space-between;
+            font-size: 13px; margin-bottom: 6px; color: #aaa;
+        }
+        .slider-group label span { color: #8b5cf6; font-weight: 600; }
+        input[type="range"] {
+            -webkit-appearance: none; width: 100%; height: 6px;
+            background: #2a2a3a; border-radius: 3px; outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 18px; height: 18px;
+            background: #8b5cf6; border-radius: 50%; cursor: pointer;
+            box-shadow: 0 0 8px rgba(139,92,246,0.5);
+        }
+
+        /* ===== 预设按钮 / Preset buttons ===== */
+        .preset-row {
+            display: flex; gap: 8px; margin-top: 16px;
+        }
+        .preset-btn {
+            flex: 1; padding: 10px 0;
+            background: rgba(139, 92, 246, 0.15);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 10px;
+            color: #c4b5fd; font-size: 13px; font-weight: 500;
+            cursor: pointer; transition: all 0.2s;
+            text-align: center;
+        }
+        .preset-btn:hover {
+            background: rgba(139, 92, 246, 0.3);
+            border-color: rgba(139, 92, 246, 0.6);
+        }
+        .preset-btn.active {
+            background: rgba(139, 92, 246, 0.4);
+            border-color: #8b5cf6;
+            color: #fff;
+        }
+
+        /* ===== 提示信息 / Info tip ===== */
+        #info {
+            position: fixed; bottom: 20px; left: 50%;
+            transform: translateX(-50%);
+            font-size: 12px; color: #555;
+            text-align: center;
+        }
+
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+
+<!-- 加载进度界面 / Loading overlay -->
+<div id="loading-overlay">
+    <div id="loading-text">正在加载 3D 模型 / Loading 3D model...</div>
+    <div id="loading-bar-bg"><div id="loading-bar"></div></div>
+    <div id="loading-percent">0%</div>
+</div>
+
+<!-- 表情控制面板 / Expression control panel -->
+<div id="controls">
+    <h2>表情控制 / Expression Control</h2>
+
+    <div class="slider-group">
+        <label>😊 开心 ↔ 不开心 😞 <span id="expr-val">0</span></label>
+        <input type="range" id="expression" min="-100" max="100" value="0">
+    </div>
+
+    <div class="slider-group">
+        <label>嘴巴张合 / Jaw Open <span id="jaw-val">0</span></label>
+        <input type="range" id="jawOpen" min="0" max="100" value="0">
+    </div>
+
+    <div class="slider-group">
+        <label>眉毛高度 / Brow Raise <span id="brow-val">0</span></label>
+        <input type="range" id="browRaise" min="-100" max="100" value="0">
+    </div>
+
+    <div class="slider-group">
+        <label>变形强度 / Deform Scale <span id="scale-val">1.0</span></label>
+        <input type="range" id="deformScale" min="1" max="50" value="10">
+    </div>
+
+    <div class="preset-row">
+        <button class="preset-btn" data-preset="happy">😊 开心</button>
+        <button class="preset-btn" data-preset="sad">😢 不开心</button>
+        <button class="preset-btn" data-preset="neutral">😐 中性</button>
+    </div>
+    <div class="preset-row">
+        <button class="preset-btn" data-preset="surprised">😮 惊讶</button>
+        <button class="preset-btn" data-preset="angry">😠 生气</button>
+    </div>
+</div>
+
+<div id="info">鼠标拖动旋转 · 滚轮缩放 · 右键平移 / Drag to rotate · Scroll to zoom · Right-click to pan</div>
+
+<!-- Three.js 通过 importmap 引入 / Three.js via importmap -->
+<script type="importmap">
+{
+    "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.162.0/examples/jsm/"
+    }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ============================================================
+// 面部关键点坐标（由顶点分析得出）
+// Facial landmark coordinates (derived from vertex analysis)
+// ============================================================
+const LANDMARKS = {
+    nose:             [0.000,  0.024, -0.910],
+    mouthCenter:      [0.000, -0.010, -0.908],
+    leftMouthCorner:  [0.050, -0.005, -0.900],
+    rightMouthCorner: [-0.050, -0.005, -0.900],
+    leftEye:          [0.089,  0.098, -0.868],
+    rightEye:         [-0.086, 0.099, -0.861],
+    leftBrow:         [0.050,  0.155, -0.850],
+    rightBrow:        [-0.050, 0.155, -0.850],
+    leftCheek:        [0.075,  0.040, -0.880],
+    rightCheek:       [-0.075, 0.040, -0.880],
+    chin:             [0.000, -0.180, -0.700],
+};
+
+// ============================================================
+// 表情预设 / Expression presets
+// ============================================================
+const PRESETS = {
+    happy:    { expression: 80,  jawOpen: 10, browRaise: 20 },
+    sad:      { expression: -80, jawOpen: 0,  browRaise: -40 },
+    neutral:  { expression: 0,   jawOpen: 0,  browRaise: 0 },
+    surprised:{ expression: 10,  jawOpen: 70, browRaise: 80 },
+    angry:    { expression: -40, jawOpen: 10, browRaise: -70 },
+};
+
+// ============================================================
+// 场景初始化 / Scene setup
+// ============================================================
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0f0f1a);
+
+const camera = new THREE.PerspectiveCamera(
+    35, window.innerWidth / window.innerHeight, 0.01, 100
+);
+// 相机放在面部正前方 / Camera in front of the face
+camera.position.set(0, 0.05, -1.6);
+
+const renderer = new THREE.WebGLRenderer({
+    antialias: true,
+    powerPreference: 'high-performance'
+});
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.2;
+document.body.appendChild(renderer.domElement);
+
+// 轨道控制器 / Orbit controls
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 0.02, -0.65);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 0.5;
+controls.maxDistance = 5;
+controls.update();
+
+// ============================================================
+// 灯光 / Lighting
+// ============================================================
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+scene.add(ambientLight);
+
+const keyLight = new THREE.DirectionalLight(0xffffff, 1.5);
+keyLight.position.set(0.5, 0.5, -2);
+scene.add(keyLight);
+
+const fillLight = new THREE.DirectionalLight(0x8888ff, 0.4);
+fillLight.position.set(-0.5, 0.2, -1.5);
+scene.add(fillLight);
+
+const rimLight = new THREE.DirectionalLight(0xffffff, 0.3);
+rimLight.position.set(0, 0.3, 0.5);
+scene.add(rimLight);
+
+// ============================================================
+// Shader 注入代码（GPU 端顶点变形）
+// Shader injection code (GPU-side vertex deformation)
+// ============================================================
+
+// 传入 shader 的 uniform 引用 / Shader uniform references
+const expressionUniforms = {
+    u_expression: { value: 0.0 },  // -1.0 (sad) to 1.0 (happy)
+    u_jawOpen:    { value: 0.0 },  // 0.0 to 1.0
+    u_browRaise:  { value: 0.0 },  // -1.0 to 1.0
+    u_scale:      { value: 1.0 },  // deformation intensity multiplier
+};
+
+// 顶点着色器注入的 uniform 声明 / Uniform declarations to inject into vertex shader
+const UNIFORM_INJECTION = `
+    uniform float u_expression;
+    uniform float u_jawOpen;
+    uniform float u_browRaise;
+    uniform float u_scale;
+
+    // 高斯衰减函数：距离中心越近权重越大
+    // Gaussian falloff: higher weight closer to center
+    float gaussianWeight(vec3 p, vec3 center, float sigma) {
+        float d = distance(p, center);
+        return exp(-d * d / (2.0 * sigma * sigma));
+    }
+`;
+
+// 顶点变形逻辑 / Vertex deformation logic
+const DEFORM_INJECTION = `
+    // 仅变形面部正面区域 / Only deform front-facing face region
+    float faceMask = smoothstep(-0.55, -0.70, transformed.z);
+
+    float expr = u_expression;
+    float jaw  = u_jawOpen;
+    float brow = u_browRaise;
+    float s    = u_scale;
+
+    // ---- 嘴角上扬/下拉 (smile/frown) ----
+    float lCorner = gaussianWeight(transformed, vec3(0.050, -0.005, -0.900), 0.035);
+    float rCorner = gaussianWeight(transformed, vec3(-0.050, -0.005, -0.900), 0.035);
+    float cornerW = (lCorner + rCorner) * faceMask;
+    transformed.y += expr * 0.018 * s * cornerW;
+    // 嘴角微笑时略向外扩 / Corners spread slightly when smiling
+    transformed.x += expr * 0.006 * s * (lCorner - rCorner) * faceMask;
+
+    // ---- 嘴唇区域跟随 / Lip region follow ----
+    float lipRegion = gaussianWeight(transformed, vec3(0.0, -0.010, -0.908), 0.025);
+    float lipSide = smoothstep(0.005, 0.04, abs(transformed.x));
+    transformed.y += expr * 0.008 * s * lipRegion * lipSide * faceMask;
+
+    // ---- 脸颊隆起 / Cheek raise ----
+    float lCheek = gaussianWeight(transformed, vec3(0.075, 0.040, -0.880), 0.045);
+    float rCheek = gaussianWeight(transformed, vec3(-0.075, 0.040, -0.880), 0.045);
+    float cheekW = (lCheek + rCheek) * faceMask;
+    transformed.y += max(expr, 0.0) * 0.010 * s * cheekW;
+    transformed.z -= max(expr, 0.0) * 0.006 * s * cheekW;
+
+    // ---- 眼睛微眯 (smile squint) ----
+    float lEyeLow = gaussianWeight(transformed, vec3(0.089, 0.085, -0.870), 0.020);
+    float rEyeLow = gaussianWeight(transformed, vec3(-0.086, 0.086, -0.870), 0.020);
+    float squintW = (lEyeLow + rEyeLow) * faceMask;
+    transformed.y += max(expr, 0.0) * 0.006 * s * squintW;
+
+    // ---- 张嘴 / Jaw open ----
+    float jawRegion = gaussianWeight(transformed, vec3(0.0, -0.08, -0.850), 0.06);
+    float belowMouth = smoothstep(-0.01, -0.06, transformed.y);
+    transformed.y -= jaw * 0.025 * s * jawRegion * belowMouth * faceMask;
+    // 上唇不动，下唇跟随下巴 / Upper lip stays, lower lip follows jaw
+    float lowerLip = gaussianWeight(transformed, vec3(0.0, -0.02, -0.905), 0.020);
+    transformed.y -= jaw * 0.010 * s * lowerLip * faceMask;
+
+    // ---- 眉毛升降 / Brow raise/lower ----
+    float lBrow = gaussianWeight(transformed, vec3(0.050, 0.155, -0.850), 0.030);
+    float rBrow = gaussianWeight(transformed, vec3(-0.050, 0.155, -0.850), 0.030);
+    float browW = (lBrow + rBrow) * faceMask;
+    transformed.y += brow * 0.012 * s * browW;
+
+    // ---- 不开心时：内眉下沉 / Sad: inner brow droop ----
+    float lInnerBrow = gaussianWeight(transformed, vec3(0.025, 0.150, -0.855), 0.022);
+    float rInnerBrow = gaussianWeight(transformed, vec3(-0.025, 0.150, -0.855), 0.022);
+    float innerBrowW = (lInnerBrow + rInnerBrow) * faceMask;
+    transformed.y += min(expr, 0.0) * 0.008 * s * innerBrowW;
+`;
+
+// ============================================================
+// 加载模型 / Load model
+// ============================================================
+const loader = new GLTFLoader();
+let shaderRef = null;  // 保存 shader 引用以更新 uniforms / store shader ref
+
+loader.load(
+    '/model.glb',
+    // 加载成功回调 / onLoad
+    (gltf) => {
+        const model = gltf.scene;
+        scene.add(model);
+
+        // 遍历所有 mesh，注入 shader / Traverse all meshes, inject shader
+        model.traverse((child) => {
+            if (child.isMesh && child.material) {
+                const mat = child.material;
+
+                // 注入自定义顶点着色器代码 / Inject custom vertex shader code
+                mat.onBeforeCompile = (shader) => {
+                    // 合并 uniforms / Merge uniforms
+                    Object.assign(shader.uniforms, expressionUniforms);
+
+                    // 注入 uniform 声明 / Inject uniform declarations
+                    shader.vertexShader = shader.vertexShader.replace(
+                        '#include <common>',
+                        '#include <common>\n' + UNIFORM_INJECTION
+                    );
+
+                    // 注入变形代码（在 begin_vertex 之后）
+                    // Inject deformation code (after begin_vertex)
+                    shader.vertexShader = shader.vertexShader.replace(
+                        '#include <begin_vertex>',
+                        '#include <begin_vertex>\n' + DEFORM_INJECTION
+                    );
+
+                    shaderRef = shader;
+                };
+
+                mat.needsUpdate = true;
+            }
+        });
+
+        // 隐藏加载界面 / Hide loading overlay
+        document.getElementById('loading-overlay').classList.add('hidden');
+        setTimeout(() => {
+            document.getElementById('loading-overlay').style.display = 'none';
+        }, 600);
+    },
+    // 加载进度回调 / onProgress
+    (xhr) => {
+        if (xhr.lengthComputable) {
+            const pct = Math.round((xhr.loaded / xhr.total) * 100);
+            document.getElementById('loading-bar').style.width = pct + '%';
+            document.getElementById('loading-percent').textContent = pct + '%';
+        }
+    },
+    // 加载错误回调 / onError
+    (err) => {
+        console.error('模型加载失败 / Model load failed:', err);
+        document.getElementById('loading-text').textContent =
+            '加载失败 / Load failed — 请确认服务器已运行';
+        document.getElementById('loading-text').style.color = '#f87171';
+    }
+);
+
+// ============================================================
+// 滑块交互 / Slider interaction
+// ============================================================
+
+function updateUniforms() {
+    const exprVal  = parseInt(document.getElementById('expression').value);
+    const jawVal   = parseInt(document.getElementById('jawOpen').value);
+    const browVal  = parseInt(document.getElementById('browRaise').value);
+    const scaleVal = parseInt(document.getElementById('deformScale').value);
+
+    expressionUniforms.u_expression.value = exprVal / 100;
+    expressionUniforms.u_jawOpen.value    = jawVal / 100;
+    expressionUniforms.u_browRaise.value  = browVal / 100;
+    expressionUniforms.u_scale.value      = scaleVal / 10;
+
+    document.getElementById('expr-val').textContent  = exprVal;
+    document.getElementById('jaw-val').textContent   = jawVal;
+    document.getElementById('brow-val').textContent  = browVal;
+    document.getElementById('scale-val').textContent = (scaleVal / 10).toFixed(1);
+}
+
+['expression', 'jawOpen', 'browRaise', 'deformScale'].forEach(id => {
+    document.getElementById(id).addEventListener('input', updateUniforms);
+});
+
+// 带动画的参数过渡 / Animated parameter transition
+function animateToPreset(preset) {
+    const target = PRESETS[preset];
+    if (!target) return;
+
+    const ids = ['expression', 'jawOpen', 'browRaise'];
+    const keys = ['expression', 'jawOpen', 'browRaise'];
+    const startValues = keys.map(k => parseInt(document.getElementById(k).value));
+    const endValues   = [target.expression, target.jawOpen, target.browRaise];
+
+    const duration = 400;  // ms
+    const startTime = performance.now();
+
+    function step(now) {
+        const t = Math.min((now - startTime) / duration, 1);
+        // ease-out cubic
+        const ease = 1 - Math.pow(1 - t, 3);
+
+        for (let i = 0; i < ids.length; i++) {
+            const val = Math.round(startValues[i] + (endValues[i] - startValues[i]) * ease);
+            document.getElementById(ids[i]).value = val;
+        }
+        updateUniforms();
+
+        if (t < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+
+    // 高亮当前按钮 / Highlight active button
+    document.querySelectorAll('.preset-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.preset === preset);
+    });
+}
+
+document.querySelectorAll('.preset-btn').forEach(btn => {
+    btn.addEventListener('click', () => animateToPreset(btn.dataset.preset));
+});
+
+// ============================================================
+// 渲染循环 / Render loop
+// ============================================================
+function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+}
+animate();
+
+// ============================================================
+// 窗口自适应 / Window resize handling
+// ============================================================
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+</script>
+</body>
+</html>

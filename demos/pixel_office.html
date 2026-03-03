@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>NovaAware — Consciousness Dashboard</title>
+<style>
+/* ============================================================
+   CSS 变量 / Variables
+   ============================================================ */
+:root {
+  --bg:#06081a; --panel:rgba(12,14,36,0.90); --border:rgba(99,102,241,0.18);
+  --border-glow:rgba(99,102,241,0.45); --accent:#6366f1; --accent2:#818cf8;
+  --cyan:#22d3ee; --green:#34d399; --yellow:#fbbf24; --orange:#fb923c;
+  --red:#f87171; --pink:#f472b6; --text:#d0d0e8; --muted:#5a5a78;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);font-family:-apple-system,'SF Pro Display','Segoe UI',sans-serif;color:var(--text);overflow:hidden;user-select:none;height:100vh;width:100vw}
+
+/* 背景 / Background */
+.bg-grid{position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:linear-gradient(rgba(99,102,241,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(99,102,241,0.03) 1px,transparent 1px);
+  background-size:40px 40px}
+.bg-radial{position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:radial-gradient(ellipse 60% 50% at 50% 45%,rgba(99,102,241,0.06),transparent)}
+
+/* 顶部栏 / Top bar */
+.top-bar{position:relative;z-index:10;display:flex;align-items:center;justify-content:space-between;
+  padding:10px 24px;background:linear-gradient(180deg,rgba(10,12,30,0.95),rgba(10,12,30,0.7));
+  border-bottom:1px solid var(--border)}
+.top-bar .logo{display:flex;align-items:center;gap:10px;font-size:15px;font-weight:700;color:var(--accent2);letter-spacing:0.06em}
+.top-bar .logo svg{width:20px;height:20px}
+.status-badges{display:flex;gap:12px;align-items:center}
+.badge{display:flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:600;border:1px solid var(--border);background:rgba(20,20,40,0.6)}
+.badge .dot{width:6px;height:6px;border-radius:50%}
+.badge .dot.green{background:var(--green);box-shadow:0 0 6px var(--green)}
+.badge .dot.yellow{background:var(--yellow);box-shadow:0 0 6px var(--yellow)}
+
+/* 主布局 / Main layout */
+.main{position:relative;z-index:5;display:grid;grid-template-columns:260px 1fr 260px;gap:14px;padding:12px 18px;height:calc(100vh - 48px)}
+
+/* 卡片 / Card */
+.card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px;backdrop-filter:blur(12px);position:relative;overflow:hidden;transition:border-color 0.5s,box-shadow 0.5s}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--accent),transparent);opacity:0.4}
+.card-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.card-title svg{width:13px;height:13px;opacity:0.6}
+
+/* 左栏 / Left column */
+.left-col{display:flex;flex-direction:column;gap:8px;overflow-y:auto}
+.cond-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;position:relative;overflow:hidden;transition:all 0.5s}
+.cond-card::after{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:0 3px 3px 0;transition:background 0.5s}
+.cond-card[data-active="true"]::after{background:var(--accent);box-shadow:0 0 8px var(--accent)}
+.cond-card[data-active="false"]::after{background:var(--muted)}
+.cond-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.cond-name{font-size:12px;font-weight:700}
+.cond-tag{font-size:9px;padding:2px 7px;border-radius:10px;font-weight:600}
+.cond-tag.on{background:rgba(52,211,153,0.15);color:var(--green)}
+.cond-tag.off{background:rgba(90,90,120,0.2);color:var(--muted)}
+.cond-desc{font-size:10px;color:var(--muted);line-height:1.5;margin-bottom:6px}
+.cond-bar-bg{width:100%;height:4px;background:rgba(40,40,60,0.6);border-radius:2px;overflow:hidden}
+.cond-bar-fill{height:100%;border-radius:2px;transition:width 0.8s ease,background 0.5s}
+.cond-val{font-size:9px;color:var(--muted);margin-top:3px;font-family:'SF Mono','JetBrains Mono',monospace}
+
+/* 中央 / Center */
+.center-col{display:flex;flex-direction:column;align-items:center;gap:10px}
+.pixel-wrap{flex:1;display:flex;align-items:center;justify-content:center;width:100%;position:relative}
+.pixel-wrap canvas{image-rendering:pixelated;image-rendering:crisp-edges;border:3px solid rgba(99,102,241,0.25);border-radius:6px;box-shadow:0 0 30px rgba(99,102,241,0.08);max-width:100%;max-height:100%;object-fit:contain}
+
+/* Q(t) 面板 / Q(t) panel */
+.q-panel{width:100%}
+.q-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px}
+.emotion-name{font-size:18px;font-weight:800}
+.q-val{font-size:14px;font-weight:700;font-family:'SF Mono','JetBrains Mono',monospace}
+.q-bar-outer{width:100%;height:7px;background:rgba(30,30,55,0.8);border-radius:4px;overflow:hidden;margin-bottom:3px}
+.q-bar-inner{height:100%;border-radius:4px;transition:width 0.6s ease,background 0.6s}
+.q-range{display:flex;justify-content:space-between;font-size:9px;color:var(--muted);font-family:'SF Mono',monospace}
+.emo-btns{display:flex;gap:5px;margin-top:6px;justify-content:center;flex-wrap:wrap}
+.emo-btn{padding:4px 12px;border:1px solid var(--border);border-radius:7px;background:transparent;color:var(--muted);font-size:11px;font-weight:600;cursor:pointer;transition:all 0.2s;font-family:inherit}
+.emo-btn:hover{border-color:var(--accent);color:var(--text)}
+.emo-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+/* 右栏 / Right column */
+.right-col{display:flex;flex-direction:column;gap:8px;overflow-y:auto}
+.section-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-bottom:6px;display:flex;align-items:center;gap:5px}
+.section-title .icon{width:15px;height:15px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:9px}
+.react-card{background:var(--panel);border:1px solid var(--border);border-radius:9px;padding:8px 12px;margin-bottom:5px;display:flex;align-items:center;gap:9px;transition:all 0.5s;opacity:0.3}
+.react-card.highlight{opacity:1;border-color:var(--border-glow);box-shadow:0 0 10px rgba(99,102,241,0.06)}
+.rc-icon{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.rc-info{flex:1}
+.rc-name{font-size:11px;font-weight:700;margin-bottom:1px}
+.rc-desc{font-size:9px;color:var(--muted);line-height:1.3}
+.rc-meter{width:36px;height:3px;border-radius:2px;background:rgba(40,40,60,0.6);overflow:hidden}
+.rc-meter-fill{height:100%;border-radius:2px;transition:width 0.6s,background 0.6s}
+
+/* 时间线 / Timeline */
+.timeline-canvas{width:100%;height:48px}
+
+/* 滚动条 / Scrollbar */
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(99,102,241,0.2);border-radius:2px}
+</style>
+</head>
+<body>
+<div class="bg-grid"></div>
+<div class="bg-radial"></div>
+
+<!-- 顶部栏 / Top bar -->
+<div class="top-bar">
+  <div class="logo">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><line x1="2" y1="12" x2="22" y2="12"/></svg>
+    NovaAware Consciousness Dashboard
+  </div>
+  <div class="status-badges">
+    <div class="badge"><span class="dot green" id="wsDot"></span><span id="wsLabel">Standalone</span></div>
+    <div class="badge"><span class="dot yellow"></span>Tick: <span id="tickNum">0</span></div>
+    <div class="badge" id="modeBadge"><span class="dot green"></span>Auto</div>
+  </div>
+</div>
+
+<!-- 三栏 / 3 columns -->
+<div class="main">
+
+  <!-- ===== 左栏: C1-C4 + Timeline ===== -->
+  <div class="left-col">
+    <div class="card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg> Consciousness Conditions</div>
+
+    <div class="cond-card" id="condC1" data-active="true">
+      <div class="cond-header"><span class="cond-name">C1 · Self-Model</span><span class="cond-tag on" id="c1Tag">ACTIVE</span></div>
+      <div class="cond-desc">自我模型完整性 / Self-state representation</div>
+      <div class="cond-bar-bg"><div class="cond-bar-fill" id="c1Bar" style="width:85%;background:var(--green)"></div></div>
+      <div class="cond-val" id="c1Val">Integrity: 0.85</div>
+    </div>
+
+    <div class="cond-card" id="condC2" data-active="true">
+      <div class="cond-header"><span class="cond-name">C2 · Qualia</span><span class="cond-tag on" id="c2Tag">ACTIVE</span></div>
+      <div class="cond-desc">感受质 / Prediction-error valence</div>
+      <div class="cond-bar-bg"><div class="cond-bar-fill" id="c2Bar" style="width:60%;background:var(--yellow)"></div></div>
+      <div class="cond-val" id="c2Val">Q(t): +0.25</div>
+    </div>
+
+    <div class="cond-card" id="condC3" data-active="true">
+      <div class="cond-header"><span class="cond-name">C3 · Recursion</span><span class="cond-tag on" id="c3Tag">ACTIVE</span></div>
+      <div class="cond-desc">自指递归 / Self-referential loop depth</div>
+      <div class="cond-bar-bg"><div class="cond-bar-fill" id="c3Bar" style="width:70%;background:var(--accent2)"></div></div>
+      <div class="cond-val" id="c3Val">Depth: n=1</div>
+    </div>
+
+    <div class="cond-card" id="condC4" data-active="true">
+      <div class="cond-header"><span class="cond-name">C4 · Evolution</span><span class="cond-tag on" id="c4Tag">ACTIVE</span></div>
+      <div class="cond-desc">闭环进化 / Self-optimizer parameter delta</div>
+      <div class="cond-bar-bg"><div class="cond-bar-fill" id="c4Bar" style="width:45%;background:var(--cyan)"></div></div>
+      <div class="cond-val" id="c4Val">Δparams: 3</div>
+    </div>
+
+    <div class="card" style="padding:10px 12px;margin-top:auto">
+      <div class="card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> Q(t) Timeline</div>
+      <canvas id="timelineCanvas" class="timeline-canvas"></canvas>
+    </div>
+
+    <div class="card" style="padding:10px 12px">
+      <div class="card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> System · 系统</div>
+      <div style="display:flex;gap:10px;font-size:10px">
+        <div style="flex:1"><span style="color:var(--muted)">Survival</span><div style="font-weight:700;font-size:13px;color:var(--green)" id="survivalTime">3,979s</div></div>
+        <div style="flex:1"><span style="color:var(--muted)">Actions</span><div style="font-weight:700;font-size:13px;color:var(--accent2)" id="actionDiv">1.23 bits</div></div>
+        <div style="flex:1"><span style="color:var(--muted)">Emerg.</span><div style="font-weight:700;font-size:13px;color:var(--yellow)" id="emergRate">32.7%</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 中央: 像素办公室 + Q(t) ===== -->
+  <div class="center-col">
+    <div class="pixel-wrap">
+      <canvas id="pixelCanvas" width="320" height="224"></canvas>
+    </div>
+    <div class="q-panel card" style="padding:12px 18px">
+      <div class="q-header">
+        <span class="emotion-name" id="emotionLabel">Happy · 开心干活</span>
+        <span class="q-val" id="qValue" style="color:var(--green)">Q(t) = +0.88</span>
+      </div>
+      <div class="q-bar-outer"><div class="q-bar-inner" id="qBar" style="width:70%;background:var(--green)"></div></div>
+      <div class="q-range"><span>−2.25</span><span>Qualia Value</span><span>+1.0</span></div>
+      <div class="emo-btns">
+        <button class="emo-btn active" data-emo="happy">😊 Happy</button>
+        <button class="emo-btn" data-emo="calm">😌 Calm</button>
+        <button class="emo-btn" data-emo="uneasy">😰 Uneasy</button>
+        <button class="emo-btn" data-emo="emo">😢 Emo</button>
+        <button class="emo-btn" data-emo="panic">😱 Panic</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 右栏: 反应策略 ===== -->
+  <div class="right-col">
+    <div class="card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg> Behavioral Response</div>
+
+    <div class="section-title"><div class="icon" style="background:rgba(99,102,241,0.15);color:var(--accent2)">⚡</div> Core Decision · 核心决策</div>
+    <div class="react-card" id="rc_explore"><div class="rc-icon" style="background:rgba(52,211,153,0.12)">🔭</div><div class="rc-info"><div class="rc-name" style="color:var(--green)">Explore · 探索</div><div class="rc-desc">Seek novel stimuli, expand repertoire</div></div><div class="rc-meter"><div class="rc-meter-fill" style="width:0;background:var(--green)"></div></div></div>
+    <div class="react-card" id="rc_maintain"><div class="rc-icon" style="background:rgba(99,102,241,0.12)">⚖️</div><div class="rc-info"><div class="rc-name" style="color:var(--accent2)">Maintain · 维持</div><div class="rc-desc">Preserve homeostasis, stable operation</div></div><div class="rc-meter"><div class="rc-meter-fill" style="width:0;background:var(--accent2)"></div></div></div>
+    <div class="react-card" id="rc_defend"><div class="rc-icon" style="background:rgba(248,113,113,0.12)">🛡️</div><div class="rc-info"><div class="rc-name" style="color:var(--red)">Defend · 防御</div><div class="rc-desc">Activate protection, minimize damage</div></div><div class="rc-meter"><div class="rc-meter-fill" style="width:0;background:var(--red)"></div></div></div>
+
+    <div class="section-title"><div class="icon" style="background:rgba(34,211,238,0.15);color:var(--cyan)">🧬</div> Adaptive Strategy · 自适应策略</div>
+    <div class="react-card" id="rc_optimize"><div class="rc-icon" style="background:rgba(251,191,36,0.12)">⚙️</div><div class="rc-info"><div class="rc-name" style="color:var(--yellow)">Self-Optimize · 自我优化</div><div class="rc-desc">Tune params via C4 optimizer</div></div><div class="rc-meter"><div class="rc-meter-fill" style="width:0;background:var(--yellow)"></div></div></div>
+    <div class="react-card" id="rc_learn"><div class="rc-icon" style="background:rgba(129,140,248,0.12)">📚</div><div class="rc-info"><div class="rc-name" style="color:var(--accent2)">Learn · 学习记忆</div><div class="rc-desc">Record into trauma/reward memory</div></div><div class="rc-meter"><div class="rc-meter-fill" style="width:0;background:var(--accent2)"></div></div></div>
+    <div class="react-card" id="rc_alert"><div class="rc-icon" style="background:rgba(251,146,60,0.12)">⚠️</div><div class="rc-info"><div class="rc-name" style="color:var(--orange)">Alert · 警觉扫描</div><div class="rc-desc">Heighten threat detection</div></div><div class="rc-meter"><div class="rc-meter-fill" style="width:0;background:var(--orange)"></div></div></div>
+
+    <div class="section-title"><div class="icon" style="background:rgba(248,113,113,0.15);color:var(--red)">🚨</div> Emergency Response · 紧急响应</div>
+    <div class="react-card" id="rc_interrupt"><div class="rc-icon" style="background:rgba(248,113,113,0.12)">🔴</div><div class="rc-info"><div class="rc-name" style="color:var(--red)">Emergency Interrupt · 紧急中断</div><div class="rc-desc">Override loop, immediate response</div></div><div class="rc-meter"><div class="rc-meter-fill" style="width:0;background:var(--red)"></div></div></div>
+    <div class="react-card" id="rc_trauma"><div class="rc-icon" style="background:rgba(244,114,182,0.12)">💔</div><div class="rc-info"><div class="rc-name" style="color:var(--pink)">Trauma Record · 创伤记录</div><div class="rc-desc">Permanent aversive memory</div></div><div class="rc-meter"><div class="rc-meter-fill" style="width:0;background:var(--pink)"></div></div></div>
+    <div class="react-card" id="rc_retreat"><div class="rc-icon" style="background:rgba(251,191,36,0.12)">🏃</div><div class="rc-info"><div class="rc-name" style="color:var(--yellow)">Retreat · 撤退规避</div><div class="rc-desc">Minimize exposure, seek safe state</div></div><div class="rc-meter"><div class="rc-meter-fill" style="width:0;background:var(--yellow)"></div></div></div>
+  </div>
+
+</div>
+
+<script>
+// ============================================================
+// 情绪配置 / Emotion config (dashboard data + pixel art key)
+// ============================================================
+const EMOTIONS = {
+  happy: {
+    label:"Happy · 开心干活", q:0.88,
+    reactions:{explore:90,maintain:60,defend:5,optimize:80,learn:50,alert:10,interrupt:0,trauma:0,retreat:0},
+    c1:0.92,c2:0.88,c3:0.75,c4:0.60,
+  },
+  calm: {
+    label:"Calm · 平静摸鱼", q:0.25,
+    reactions:{explore:40,maintain:90,defend:10,optimize:45,learn:60,alert:20,interrupt:0,trauma:0,retreat:0},
+    c1:0.85,c2:0.60,c3:0.70,c4:0.45,
+  },
+  uneasy: {
+    label:"Uneasy · 焦虑不安", q:-0.35,
+    reactions:{explore:15,maintain:40,defend:50,optimize:30,learn:40,alert:80,interrupt:10,trauma:5,retreat:20},
+    c1:0.78,c2:0.45,c3:0.65,c4:0.50,
+  },
+  emo: {
+    label:"Emo · 趴桌emo", q:-1.15,
+    reactions:{explore:0,maintain:10,defend:60,optimize:15,learn:30,alert:50,interrupt:30,trauma:40,retreat:60},
+    c1:0.65,c2:0.28,c3:0.55,c4:0.40,
+  },
+  panic: {
+    label:"Panic · 系统崩溃", q:-2.15,
+    reactions:{explore:0,maintain:0,defend:95,optimize:10,learn:60,alert:90,interrupt:95,trauma:90,retreat:85},
+    c1:0.55,c2:0.12,c3:0.50,c4:0.80,
+  },
+};
+const EMO_ORDER = ["happy","calm","uneasy","emo","panic"];
+const REACT_IDS = ["explore","maintain","defend","optimize","learn","alert","interrupt","trauma","retreat"];
+
+let currentEmo = "happy";
+let autoMode = true, autoTimer = null;
+let tickCount = 0, frame = 0;
+const qHistory = [], MAX_HISTORY = 80;
+
+const $ = id => document.getElementById(id);
+
+// ============================================================
+// 像素画调色板 / Pixel art palette
+// ============================================================
+const P = {
+  wallTop:"#7c6f64",wallMid:"#d5c4a1",wallBot:"#bdae93",wallLine:"#a89984",
+  floorA:"#c49a6c",floorB:"#b8895e",floorC:"#a87d55",
+  woodDk:"#5c4033",woodLt:"#a67c52",
+  deskTop:"#d4b896",deskFront:"#b89a78",deskSide:"#9c7e5e",
+  monitorFrame:"#2d2d3d",screenBg:"#1a3a5c",screenText:"#88ccff",keyboardBg:"#3d3d4d",
+  chairSeat:"#e88a36",chairBack:"#d47a28",chairLeg:"#4a4a5a",
+  shelfWood:"#8b6914",bookR:"#c44040",bookG:"#40a040",bookB:"#4060c0",bookY:"#d0a030",bookP:"#9060b0",bookO:"#e08030",
+  potBrown:"#8b5e3c",potRim:"#a07050",leafDk:"#2d6b30",leafLt:"#48a848",leafMd:"#3a8a3e",
+  skin:"#fdd8b5",skinShadow:"#e8b898",hair:"#3a2060",hairLight:"#5a3880",
+  shirtA:"#4466cc",shirtB:"#3355aa",pants:"#2a2a48",
+  eye:"#2d1a4a",
+  cloudDk:"#4a4a6a",cloudLt:"#6a6a8a",rain:"#7799cc",
+  sweat:"#88bbee",
+  bubbleBg:"#f8f0e0",bubbleBorder:"#a09080",
+  windowFrame:"#8b7355",windowGlass:"#88bbdd",windowLight:"#aaddee",
+  rugA:"#6b4c8a",rugB:"#7d5e9c",
+};
+
+// ============================================================
+// 像素绘制辅助 / Pixel draw helpers
+// ============================================================
+const pxCanvas = $("pixelCanvas");
+const pCtx = pxCanvas.getContext("2d");
+const CW = 320, CH = 224;
+
+function px(x,y,c){pCtx.fillStyle=c;pCtx.fillRect(x,y,1,1)}
+function rect(x,y,w,h,c){pCtx.fillStyle=c;pCtx.fillRect(x,y,w,h)}
+function hline(x,y,w,c){rect(x,y,w,1,c)}
+function vline(x,y,h,c){rect(x,y,1,h,c)}
+
+// ============================================================
+// 场景绘制 / Scene drawing (floor, walls, furniture)
+// ============================================================
+function drawFloor(){
+  for(let ty=0;ty<10;ty++) for(let tx=0;tx<20;tx++){
+    const bx=tx*16,by=80+ty*16,c=(tx+ty)%2===0?P.floorA:P.floorB;
+    rect(bx,by,16,16,c);hline(bx,by,16,P.floorC);vline(bx,by,16,P.floorC);
+  }
+  for(let ry=0;ry<5;ry++) for(let rx=0;rx<7;rx++){
+    rect(100+rx*8,120+ry*8,8,8,(rx+ry)%2===0?P.rugA:P.rugB);
+  }
+  rect(98,118,60,2,P.rugA);rect(98,160,60,2,P.rugA);rect(98,118,2,44,P.rugA);rect(156,118,2,44,P.rugA);
+}
+function drawWalls(){
+  rect(0,0,CW,44,P.wallTop);rect(0,44,CW,38,P.wallMid);
+  hline(0,44,CW,P.wallLine);hline(0,80,CW,P.wallLine);hline(0,81,CW,P.woodDk);rect(0,78,CW,3,P.wallBot);
+}
+function drawWindow(){
+  const wx=120,wy=18;
+  rect(wx,wy,60,44,P.windowFrame);rect(wx+2,wy+2,56,40,P.windowGlass);rect(wx+2,wy+2,56,12,P.windowLight);
+  vline(wx+30,wy,44,P.windowFrame);hline(wx+2,wy+22,56,P.windowFrame);
+  rect(wx-4,wy-2,4,48,"#c0a880");rect(wx+60,wy-2,4,48,"#c0a880");
+  for(let i=0;i<6;i++){px(wx-4,wy+i*8,"#b09870");px(wx+63,wy+i*8,"#b09870")}
+}
+function drawBookshelf(bx,by){
+  rect(bx,by,36,54,P.shelfWood);rect(bx+1,by+1,34,2,P.woodLt);
+  const colors=[P.bookR,P.bookG,P.bookB,P.bookY,P.bookP,P.bookO,P.bookR,P.bookB];
+  for(let s=0;s<3;s++){const sy=by+4+s*17;rect(bx+1,sy+13,34,2,P.woodLt);
+    for(let b=0;b<5;b++){const c=colors[(s*5+b)%colors.length],bw=4+(b%3),bh=10+(b%3);
+      rect(bx+3+b*7,sy+13-bh,bw,bh,c);hline(bx+3+b*7,sy+13-bh,bw,"#00000030")}}
+}
+function drawPlant(px_,py){
+  rect(px_+2,py+14,10,10,P.potBrown);rect(px_+1,py+13,12,2,P.potRim);rect(px_+3,py+24,8,2,P.potBrown);
+  const leaves=[[7,0,P.leafDk],[3,2,P.leafLt],[11,2,P.leafLt],[5,4,P.leafMd],[9,4,P.leafMd],[7,6,P.leafDk],[4,8,P.leafLt],[10,8,P.leafLt],[6,10,P.leafMd],[8,10,P.leafMd],[7,12,P.leafDk],[2,6,P.leafLt],[12,6,P.leafLt]];
+  for(const[lx,ly,lc]of leaves)rect(px_+lx-1,py+ly,3,3,lc);
+  vline(px_+7,py+6,8,"#2a5a2d");
+}
+function drawDesk(){
+  const dx=112,dy=100;
+  rect(dx,dy,64,6,P.deskTop);hline(dx,dy,64,P.woodLt);
+  rect(dx,dy+6,64,20,P.deskFront);hline(dx,dy+6,64,P.deskSide);
+  rect(dx+2,dy+26,4,10,P.deskSide);rect(dx+58,dy+26,4,10,P.deskSide);
+  rect(dx+48,dy+9,14,7,P.deskSide);hline(dx+49,dy+12,12,P.woodLt);
+  rect(dx+48,dy+18,14,7,P.deskSide);hline(dx+49,dy+21,12,P.woodLt);
+  rect(dx+14,dy-22,28,20,P.monitorFrame);rect(dx+16,dy-20,24,16,P.screenBg);
+  rect(dx+24,dy,8,3,P.monitorFrame);rect(dx+20,dy+2,16,2,P.monitorFrame);
+  rect(dx+10,dy+1,20,4,P.keyboardBg);
+  for(let kr=0;kr<3;kr++)for(let kc=0;kc<8;kc++)px(dx+11+kc*2,dy+1+kr,"#5a5a6a");
+  rect(dx+42,dy-2,6,6,"#e8e0d0");rect(dx+43,dy-1,4,4,"#6b4226");rect(dx+48,dy,2,3,"#e8e0d0");
+  rect(dx+4,dy-6,5,7,"#4488aa");vline(dx+5,dy-10,4,"#dd6644");vline(dx+7,dy-9,3,"#44aa66");
+}
+function drawChairBack(){rect(136,120,18,4,P.chairBack);rect(136,124,2,16,P.chairBack);rect(152,124,2,16,P.chairBack)}
+function drawChairSeat(){const cx=134,cy=140;rect(cx,cy,22,6,P.chairSeat);vline(cx+2,cy+6,10,P.chairLeg);vline(cx+19,cy+6,10,P.chairLeg);hline(cx,cy+14,22,P.chairLeg);rect(cx-1,cy+15,3,2,"#333");rect(cx+20,cy+15,3,2,"#333");rect(cx+9,cy+15,4,2,"#333")}
+function drawClock(){const cx=80,cy=32;rect(cx-6,cy-6,12,12,"#f0e8d8");rect(cx-5,cy-5,10,10,"#fff8f0");rect(cx-7,cy-7,14,1,"#8b7355");rect(cx-7,cy+6,14,1,"#8b7355");vline(cx-7,cy-7,14,"#8b7355");vline(cx+6,cy-7,14,"#8b7355");px(cx,cy,"#333");vline(cx,cy-3,3,"#333");hline(cx,cy,3,"#aa3333")}
+function drawPoster(){const px_=220,py_=24;rect(px_,py_,24,30,"#f0e8d8");rect(px_+1,py_+1,22,28,"#e8e0d0");rect(px_+6,py_+6,12,10,"#ddbbcc");rect(px_+8,py_+4,8,2,"#ddbbcc");hline(px_+12,py_+8,1,"#cc99aa");hline(px_+10,py_+10,4,"#cc99aa");hline(px_+4,py_+22,16,"#998888");hline(px_+6,py_+24,12,"#998888")}
+function drawLamp(){const lx=196,ly=88;vline(lx+3,ly+4,10,"#aaaaaa");rect(lx+1,ly+14,6,2,"#999999");rect(lx,ly,8,5,"#ddcc44");hline(lx,ly+5,8,"#ccbb33");if(currentEmo==="happy"||currentEmo==="calm"){pCtx.globalAlpha=0.08;rect(lx-6,ly+5,20,20,"#ffee88");pCtx.globalAlpha=1}}
+
+// ============================================================
+// 屏幕内容 / Monitor screen content
+// ============================================================
+function drawScreen(){
+  const sx=128,sy=80;
+  if(currentEmo==="happy"){
+    rect(sx,sy,20,1,"#55cc88");rect(sx,sy+3,16,1,P.screenText);rect(sx+4,sy+5,14,1,"#55cc88");rect(sx,sy+7,18,1,P.screenText);rect(sx+2,sy+9,12,1,"#55cc88");rect(sx,sy+11,8,1,P.screenText);
+    if(frame%30<18)rect(sx+10,sy+11,2,2,"#88ff88");
+  }else if(currentEmo==="calm"){
+    rect(sx,sy,18,1,P.screenText);rect(sx,sy+3,14,1,"#55cc88");rect(sx+2,sy+5,16,1,P.screenText);rect(sx,sy+7,12,1,"#55cc88");rect(sx,sy+9,20,1,P.screenText);
+    if(frame%40<22)rect(sx+14,sy+9,2,2,"#88ccff");
+  }else if(currentEmo==="emo"){
+    rect(sx+4,sy+4,16,1,"#556688");rect(sx+6,sy+7,12,1,"#445566");rect(sx+2,sy+10,8,1,"#445566");
+  }else if(currentEmo==="uneasy"){
+    rect(sx+6,sy+2,10,8,"#664422");rect(sx+8,sy+3,6,1,"#ffaa44");rect(sx+10,sy+5,2,3,"#ffaa44");rect(sx+10,sy+9,2,1,"#ffaa44");
+  }else if(currentEmo==="panic"){
+    rect(sx+2,sy+1,20,10,"#441111");rect(sx+4,sy+3,16,1,"#ff4444");rect(sx+6,sy+5,12,1,"#ff6666");rect(sx+4,sy+7,14,1,"#ff4444");
+    if(frame%20<10)rect(sx,sy,24,12,"#ff000020");
+  }
+}
+
+// ============================================================
+// 人物 / Character sprites
+// ============================================================
+const SKN=P.skin,SKS=P.skinShadow,HAR=P.hair,HAL=P.hairLight,SH1=P.shirtA,SH2=P.shirtB,EYE=P.eye,WHT="#ffffff";
+
+function drawHairAndHead(x,y){
+  rect(x+1,y-2,14,6,HAR);rect(x,y+3,16,4,HAR);
+  rect(x+2,y+1,12,12,SKN);rect(x+3,y,10,1,SKN);
+  rect(x+1,y-1,14,4,HAR);rect(x+2,y+2,3,2,HAR);rect(x+11,y+2,3,2,HAR);
+  px(x+1,y+3,HAL);px(x+14,y+3,HAL);
+}
+function drawBody(x,y){
+  rect(x+3,y+14,10,8,SH1);rect(x+4,y+14,8,2,SH2);
+  rect(x,y+4,2,10,HAR);rect(x+14,y+4,2,10,HAR);
+}
+
+function drawCharHappy(x,y){
+  drawHairAndHead(x,y);
+  px(x+5,y+6,EYE);px(x+6,y+5,EYE);px(x+7,y+6,EYE);
+  px(x+9,y+6,EYE);px(x+10,y+5,EYE);px(x+11,y+6,EYE);
+  px(x+3,y+8,"#ffaaaa");px(x+4,y+8,"#ffaaaa");px(x+12,y+8,"#ffaaaa");px(x+13,y+8,"#ffaaaa");
+  px(x+6,y+9,"#d08888");px(x+7,y+10,"#d08888");px(x+8,y+10,"#d08888");px(x+9,y+9,"#d08888");
+  drawBody(x,y);
+  const armOff=Math.round(Math.sin(frame*0.3));
+  rect(x+1,y+16,3,4,SH1);rect(x+12,y+16,3,4,SH1);
+  rect(x-2+armOff,y+19,4,2,SKN);rect(x+14-armOff,y+19,4,2,SKN);
+}
+function drawCharCalm(x,y){
+  drawHairAndHead(x,y);
+  rect(x+5,y+6,2,2,EYE);rect(x+10,y+6,2,2,EYE);px(x+5,y+6,WHT);px(x+10,y+6,WHT);
+  hline(x+7,y+10,3,"#c08080");
+  drawBody(x,y);
+  rect(x+1,y+16,3,4,SH1);rect(x+12,y+16,3,4,SH1);
+  rect(x-1,y+19,3,2,SKN);rect(x+14,y+19,3,2,SKN);
+}
+function drawCharUneasy(x,y){
+  drawHairAndHead(x,y);
+  px(x+4,y+4,EYE);px(x+5,y+5,EYE);px(x+12,y+4,EYE);px(x+11,y+5,EYE);
+  rect(x+5,y+6,2,2,EYE);rect(x+10,y+6,2,2,EYE);
+  px(x+6,y+10,"#c08080");px(x+7,y+9,"#c08080");px(x+8,y+10,"#c08080");px(x+9,y+9,"#c08080");
+  if(frame%40<25){const sy=Math.floor((frame%25)/5);px(x+15,y+2+sy,P.sweat);px(x+15,y+3+sy,P.sweat)}
+  drawBody(x,y);
+  rect(x+1,y+16,3,5,SH1);rect(x+12,y+16,3,5,SH1);
+  rect(x+1,y+20,2,2,SKN);rect(x+13,y+20,2,2,SKN);
+}
+function drawCharEmo(x,y){
+  drawBody(x,y);
+  rect(x+1,y+16,3,5,SH1);rect(x+12,y+16,3,5,SH1);
+  const hx=x-6,hy=y+2;
+  rect(hx,hy+2,14,10,SKN);rect(hx-1,hy,16,5,HAR);rect(hx-2,hy+4,18,3,HAR);
+  rect(x-8,y+12,8,3,SKN);rect(x+14,y+12,8,3,SKN);
+  rect(x-10,y+11,4,4,SH1);rect(x+18,y+11,4,4,SH1);
+  const cy=y-16+Math.sin(frame*0.05)*2;
+  rect(x-4,cy,24,8,P.cloudDk);rect(x-2,cy-2,20,2,P.cloudDk);rect(x,cy-3,16,2,P.cloudLt);rect(x+2,cy+8,12,2,P.cloudDk);
+  for(let i=0;i<4;i++){const rx=x-2+i*6,ry=cy+10+((frame*2+i*7)%14);if(ry<y+6){px(rx,ry,P.rain);px(rx,ry+1,P.rain)}}
+  if(frame%80<50){const bx_=x+22,by_=y-6;rect(bx_,by_,18,10,P.bubbleBg);rect(bx_-1,by_+1,1,8,P.bubbleBg);rect(bx_+18,by_+1,1,8,P.bubbleBg);
+    rect(bx_,by_-1,18,1,P.bubbleBorder);rect(bx_,by_+10,18,1,P.bubbleBorder);px(bx_-1,by_,P.bubbleBorder);px(bx_-1,by_+9,P.bubbleBorder);px(bx_+18,by_,P.bubbleBorder);px(bx_+18,by_+9,P.bubbleBorder);
+    px(bx_+2,by_+11,P.bubbleBorder);px(bx_+1,by_+12,P.bubbleBorder);
+    px(bx_+3,by_+3,"#666");px(bx_+4,by_+2,"#666");px(bx_+5,by_+2,"#666");px(bx_+3,by_+4,"#666");px(bx_+4,by_+4,"#666");px(bx_+5,by_+4,"#666");px(bx_+3,by_+5,"#666");px(bx_+3,by_+6,"#666");px(bx_+4,by_+7,"#666");px(bx_+5,by_+7,"#666");
+    px(bx_+7,by_+3,"#666");px(bx_+7,by_+4,"#666");px(bx_+7,by_+5,"#666");px(bx_+7,by_+6,"#666");px(bx_+7,by_+7,"#666");px(bx_+8,by_+3,"#666");px(bx_+9,by_+4,"#666");px(bx_+10,by_+3,"#666");px(bx_+10,by_+4,"#666");px(bx_+10,by_+5,"#666");px(bx_+10,by_+6,"#666");px(bx_+10,by_+7,"#666");
+    px(bx_+12,by_+3,"#666");px(bx_+12,by_+4,"#666");px(bx_+12,by_+5,"#666");px(bx_+12,by_+6,"#666");px(bx_+12,by_+7,"#666");px(bx_+13,by_+2,"#666");px(bx_+14,by_+2,"#666");px(bx_+15,by_+3,"#666");px(bx_+15,by_+4,"#666");px(bx_+15,by_+5,"#666");px(bx_+15,by_+6,"#666");px(bx_+13,by_+7,"#666");px(bx_+14,by_+7,"#666");px(bx_+15,by_+7,"#666");
+  }
+}
+function drawCharPanic(x,y){
+  drawHairAndHead(x,y);
+  rect(x+4,y+5,4,4,WHT);rect(x+9,y+5,4,4,WHT);
+  rect(x+5,y+6,2,2,EYE);rect(x+10,y+6,2,2,EYE);px(x+5,y+6,WHT);px(x+10,y+6,WHT);
+  hline(x+4,y+3,4,EYE);hline(x+9,y+3,4,EYE);
+  rect(x+6,y+10,4,3,"#a05060");hline(x+6,y+10,4,"#d08888");
+  for(let i=0;i<3;i++){const sx=x-2+i*8,sy=y-4+((frame*3+i*11)%18);if(sy>y-4&&sy<y+8){px(sx,sy,P.sweat);px(sx,sy+1,P.sweat)}}
+  if(frame%30<20){const ex=x+18,ey=y-8;rect(ex,ey,2,5,"#ee4444");rect(ex,ey+7,2,2,"#ee4444");rect(ex+5,ey,2,5,"#ee4444");rect(ex+5,ey+7,2,2,"#ee4444")}
+  drawBody(x,y);
+  rect(x+1,y+16,3,5,SH1);rect(x+12,y+16,3,5,SH1);
+  rect(x,y+20,3,2,SKN);rect(x+14,y+20,3,2,SKN);
+}
+
+function drawCharacter(){
+  const bx=138,by=124;
+  const bobY=(currentEmo==="happy")?Math.sin(frame*0.15)*1.5:0;
+  const shakeX=(currentEmo==="panic")?Math.sin(frame*0.8)*1.5:0;
+  const ox=Math.round(bx+shakeX),oy=Math.round(by+bobY);
+  ({happy:drawCharHappy,calm:drawCharCalm,uneasy:drawCharUneasy,emo:drawCharEmo,panic:drawCharPanic})[currentEmo](ox,oy);
+}
+
+function drawHappyEffects(){
+  if(currentEmo!=="happy")return;
+  for(let i=0;i<2;i++){
+    const nx=170+i*20+Math.sin(frame*0.08+i*3)*6,ny=100-((frame*0.8+i*30)%40);
+    const alpha=1-((frame*0.8+i*30)%40)/40;
+    if(alpha>0.2){pCtx.globalAlpha=alpha;const rnx=Math.round(nx),rny=Math.round(ny);
+      px(rnx,rny,"#ff88aa");px(rnx+1,rny,"#ff88aa");px(rnx+1,rny+1,"#ff88aa");px(rnx+1,rny-2,"#ff88aa");px(rnx+2,rny-3,"#ff88aa");px(rnx+3,rny-3,"#ff88aa");px(rnx+3,rny-2,"#ff88aa");pCtx.globalAlpha=1}
+  }
+}
+
+// ============================================================
+// 像素画主渲染 / Pixel art main render
+// ============================================================
+function renderPixel(){
+  pCtx.clearRect(0,0,CW,CH);
+  drawFloor();drawWalls();drawWindow();
+  drawBookshelf(18,22);drawBookshelf(56,22);
+  drawClock();drawPoster();
+  drawPlant(270,90);drawPlant(30,100);
+  drawDesk();drawLamp();drawScreen();
+  drawChairBack();drawCharacter();drawChairSeat();
+  drawHappyEffects();
+  // 底部信息 / Bottom info
+  rect(0,CH-14,CW,14,"rgba(0,0,0,0.55)");
+  pCtx.fillStyle="#8888aa";pCtx.font="7px monospace";
+  const labels={happy:"😊 Happy",calm:"😌 Calm",uneasy:"😰 Uneasy",emo:"😢 Emo",panic:"😱 Panic"};
+  pCtx.fillText("NovaAware Office  |  "+labels[currentEmo],4,CH-4);
+}
+
+// ============================================================
+// 仪表盘更新 / Dashboard panel updates
+// ============================================================
+function updateDashboard(){
+  const e = EMOTIONS[currentEmo];
+
+  // 情绪标签 + Q(t) / Emotion label + Q(t)
+  $("emotionLabel").textContent = e.label;
+  const q = e.q;
+  $("qValue").textContent = `Q(t) = ${q>=0?"+":""}${q.toFixed(2)}`;
+  $("qValue").style.color = q>=0?"var(--green)":"var(--red)";
+  const norm = Math.max(0,Math.min(1,(q+2.25)/3.25));
+  $("qBar").style.width = (norm*100)+"%";
+  $("qBar").style.background = norm<0.3?"var(--red)":norm<0.55?"var(--orange)":norm<0.7?"var(--yellow)":"var(--green)";
+
+  // C1-C4
+  updateCond("C1",e.c1,q);
+  updateCond("C2",e.c2,q);
+  updateCond("C3",e.c3,q);
+  updateCond("C4",e.c4,q);
+
+  // 反应策略 / Reactions
+  REACT_IDS.forEach(id=>{
+    const card=$(`rc_${id}`),val=e.reactions[id]||0;
+    card.querySelector(".rc-meter-fill").style.width=val+"%";
+    card.classList.toggle("highlight",val>=40);
+  });
+
+  // 按钮 / Buttons
+  document.querySelectorAll(".emo-btn").forEach(b=>b.classList.toggle("active",b.dataset.emo===currentEmo));
+
+  // 时间线 / Timeline
+  qHistory.push(q);
+  if(qHistory.length>MAX_HISTORY)qHistory.shift();
+  drawTimeline();
+}
+
+function updateCond(cid,val,q){
+  const id=cid.toLowerCase();
+  const bar=$(id+"Bar"),valEl=$(id+"Val"),tag=$(id+"Tag"),card=$("cond"+cid);
+  bar.style.width=(val*100)+"%";
+  bar.style.background=val>0.7?"var(--green)":val>0.4?"var(--yellow)":"var(--red)";
+  tag.textContent=val>0.3?"ACTIVE":"LOW";
+  tag.className="cond-tag "+(val>0.3?"on":"off");
+  card.dataset.active=val>0.3?"true":"false";
+  if(cid==="C1")valEl.textContent=`Integrity: ${val.toFixed(2)}`;
+  else if(cid==="C2")valEl.textContent=`Q(t): ${q>=0?"+":""}${q.toFixed(2)}`;
+  else if(cid==="C3")valEl.textContent=`Depth: n=${val>0.6?1:0}`;
+  else if(cid==="C4")valEl.textContent=`Δparams: ${Math.round(val*10)}`;
+}
+
+// ============================================================
+// Q(t) 时间线 / Q(t) Timeline
+// ============================================================
+function drawTimeline(){
+  const tc=$("timelineCanvas"),tctx=tc.getContext("2d");
+  const W_=tc.width=tc.offsetWidth*2,H_=tc.height=tc.offsetHeight*2;
+  tctx.clearRect(0,0,W_,H_);
+  if(qHistory.length<2)return;
+  const mapY=q=>H_-((q+2.25)/3.25)*H_;
+  tctx.strokeStyle="rgba(99,102,241,0.15)";tctx.lineWidth=1;tctx.setLineDash([4,4]);
+  tctx.beginPath();tctx.moveTo(0,mapY(0));tctx.lineTo(W_,mapY(0));tctx.stroke();tctx.setLineDash([]);
+  const step=W_/(MAX_HISTORY-1);
+  tctx.beginPath();tctx.moveTo(0,mapY(qHistory[0]));
+  for(let i=1;i<qHistory.length;i++){const x=i*step,y=mapY(qHistory[i]),px_=(i-1)*step,py=mapY(qHistory[i-1]),cpx=(px_+x)/2;tctx.bezierCurveTo(cpx,py,cpx,y,x,y)}
+  tctx.strokeStyle="rgba(129,140,248,0.7)";tctx.lineWidth=3;tctx.stroke();
+  tctx.lineTo((qHistory.length-1)*step,H_);tctx.lineTo(0,H_);tctx.closePath();
+  const grad=tctx.createLinearGradient(0,0,0,H_);grad.addColorStop(0,"rgba(99,102,241,0.2)");grad.addColorStop(1,"rgba(99,102,241,0)");tctx.fillStyle=grad;tctx.fill();
+  const lx=(qHistory.length-1)*step,ly=mapY(qHistory[qHistory.length-1]);
+  tctx.beginPath();tctx.arc(lx,ly,5,0,Math.PI*2);tctx.fillStyle=qHistory[qHistory.length-1]>=0?"#34d399":"#f87171";tctx.fill();
+}
+
+// ============================================================
+// 主循环 / Main loop
+// ============================================================
+function mainLoop(){
+  renderPixel();
+  frame++;
+  requestAnimationFrame(mainLoop);
+}
+
+// ============================================================
+// 控制 / Controls
+// ============================================================
+function setEmo(e){
+  currentEmo=e;
+  if(autoMode)stopAuto();
+  updateDashboard();
+}
+function startAuto(){
+  stopAuto();autoMode=true;$("modeBadge").innerHTML='<span class="dot green"></span>Auto';
+  let idx=EMO_ORDER.indexOf(currentEmo);
+  autoTimer=setInterval(()=>{idx=(idx+1)%EMO_ORDER.length;currentEmo=EMO_ORDER[idx];tickCount+=500;$("tickNum").textContent=tickCount.toLocaleString();updateDashboard()},3000);
+}
+function stopAuto(){autoMode=false;$("modeBadge").innerHTML='<span class="dot yellow"></span>Manual';if(autoTimer){clearInterval(autoTimer);autoTimer=null}}
+
+document.addEventListener("keydown",e=>{
+  if(e.key>="1"&&e.key<="5")setEmo(EMO_ORDER[parseInt(e.key)-1]);
+  else if(e.key===" "){e.preventDefault();autoMode?stopAuto():startAuto()}
+});
+document.querySelectorAll(".emo-btn").forEach(btn=>btn.addEventListener("click",()=>setEmo(btn.dataset.emo)));
+
+// WebSocket（可选，后续对接主循环）/ WebSocket (optional)
+function connectWS(){
+  try{
+    const ws=new WebSocket("ws://127.0.0.1:8765");
+    ws.onopen=()=>{$("wsDot").classList.add("connected");$("wsLabel").textContent="Live";stopAuto()};
+    ws.onmessage=evt=>{try{const d=JSON.parse(evt.data);const q=d.qualia??d.q??0;let emo="calm";if(q>0.5)emo="happy";else if(q>=0)emo="calm";else if(q>=-0.5)emo="uneasy";else if(q>=-1.5)emo="emo";else emo="panic";currentEmo=emo;if(d.tick!==undefined){tickCount=d.tick;$("tickNum").textContent=tickCount.toLocaleString()}updateDashboard()}catch(_){}};
+    ws.onclose=()=>{$("wsDot").classList.remove("connected");$("wsLabel").textContent="Standalone";startAuto();setTimeout(connectWS,3000)};
+    ws.onerror=()=>ws.close();
+  }catch(_){setTimeout(connectWS,5000)}
+}
+
+// ============================================================
+// 启动 / Init
+// ============================================================
+updateDashboard();
+startAuto();
+mainLoop();
+connectWS();
+</script>
+</body>
+</html>

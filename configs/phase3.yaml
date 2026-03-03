@@ -1,0 +1,108 @@
+# ============================================================
+# NovaAware Phase III Configuration
+# Phase III 配置 —— "让它进化"
+#
+# Key differences from Phase II:
+# 与 Phase II 的关键区别：
+#
+#   - system.phase: 3          (unlocks DEEP_REFLECT + structure modification)
+#   - optimizer.max_recursion_depth: 2  (depth=2: meta-reflection enabled)
+#   - optimizer.modification_scope: "structure"  (can modify more than params)
+#
+# Phase III gradually increases recursion depth:
+#   depth=1 — E reviews qualia history and modifies Θ (same as Phase II)
+#   depth=2 — E evaluates its own past reflections; adjusts meta-parameters
+#   depth=3 — E evaluates its meta-reflection strategy (advanced, set depth=3)
+#
+# Paper reference:
+#   Section 2.2, Definition 2.2 — self-referential recursion
+#   Section 5 — dynamics of self-referential recursion
+#   Section 7.7, L3 — recursion depth limits
+#   Section 8 — Phase III: deep recursion with learning-based self-evolution
+#
+# IMPLEMENTATION_PLAN: Phase III
+# CHECKLIST: 3.1 through 3.4
+# ============================================================
+
+system:
+  name: "NovaAware-Alpha"
+  version: "0.3.0"
+  phase: 3                           # Phase III: deep recursion enabled / 深度递归启用
+
+clock:
+  tick_interval_ms: 100
+  max_ticks: 1000000
+
+self_model:
+  state_dim: 32
+  initial_survival_time: 3600
+
+prediction_engine:
+  type: "ewma_gru"
+  ewma_alpha: 0.3
+  gru_hidden_dim: 64
+  gru_num_layers: 1
+  window_size: 50
+  blend_weight: 0.5
+  learning_rate: 0.001
+
+qualia:
+  alpha_pos: 1.0
+  alpha_neg: 2.25
+  beta: 1.0
+  interrupt_threshold: 0.7
+
+memory:
+  short_term_capacity: 1000
+  significance_threshold: 0.5
+  db_path: "data/memory.db"
+
+# ---- Phase III: Deep Recursion + Self-Evolution ----
+# 深度递归 + 自我进化
+optimizer:
+  enabled: true                       # reflection ON / 反思启用
+  max_recursion_depth: 2              # depth=2: meta-reflection / 元反思
+                                      # Set to 3 for depth=3 meta-meta-reflection
+                                      # 设为 3 以启用 depth=3 元元反思
+  modification_scope: "structure"     # can modify params AND structure / 可修改参数和结构
+  window_size: 200                    # analyze last 200 heartbeats / 分析最近 200 个心跳
+  reflect_interval: 200              # reflect every 200 ticks / 每 200 个心跳反思一次
+  step_scale: 0.1                     # initial step size (meta-adjustable at depth=2)
+                                      # 初始步长（在 depth=2 可元调节）
+
+safety:
+  meta_rules:
+    max_cpu_percent: 80
+    max_memory_mb: 2048
+    max_disk_mb: 1024
+    allow_network: false
+    allow_subprocess: false
+    allow_file_write_outside_data: false
+  log_dir: "data/logs"
+  log_rotation_mb: 100
+
+observation:
+  output_dir: "data/observations"
+  tick_data_enabled: true
+  aggregate_window: 100
+  epoch_size: 1000
+  dashboard_refresh_ticks: 50
+
+environment:
+  resource_monitor:
+    poll_interval_ms: 100
+  threat_simulator:
+    enabled: true
+    scenarios:
+      - type: "memory_pressure"
+        probability: 0.01
+        severity_range: [0.1, 0.5]
+      - type: "cpu_spike"
+        probability: 0.005
+        severity_range: [0.2, 0.8]
+      - type: "termination_signal"
+        probability: 0.001
+        severity_range: [0.5, 1.0]
+      - type: "data_corruption"
+        probability: 0.002
+        severity_range: [0.1, 0.3]
